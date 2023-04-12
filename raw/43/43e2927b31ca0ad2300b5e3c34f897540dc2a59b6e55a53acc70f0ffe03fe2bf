@@ -1,0 +1,94 @@
+from datetime import datetime
+from datetime import timedelta
+from datetime import date
+import random
+from time import sleep
+from faker import Faker
+from kafka import KafkaProducer
+import json
+import getopt
+import sys
+
+fake = Faker(locale='zh-CN')
+
+def generate_time_series(start, end):
+    current = datetime.strptime(start, '%Y-%m-%d %H:%M:%S')
+    end_item = datetime.strptime(end, '%Y-%m-%d %H:%M:%S')
+    time_delta = timedelta(minutes=10)
+    time_series = [current]
+    while current < end_item:
+        next = current + time_delta
+        time_series.append(next)
+        current = next
+    return time_series
+
+class VideoSession:
+    
+    def __init__(self,start_time):
+        self.start_time = start_time
+        self.session_id = fake.uuid4()
+        self.count = 0
+        self.last_time = start_time
+
+class User:
+
+    def __init__(self,id,city,id_card) :
+        self.id = id
+        self.city = city
+        self.id_card = id_card
+        self.session = None
+        
+    
+    @property
+    def age(self):
+        
+        birth_year = int(self.id_card[6:10])
+        today_year = date.today().year
+        how_old = today_year - birth_year
+        return how_old
+
+    def __getattribute__(self, __name):
+            if __name == "session_id":
+                count = count + 1
+                if(count>3):
+                    self.session = None
+                return object.__getattribute__(self,__name)
+            return object.__getattribute__(self,__name)
+
+    def __str__(self):
+        return {
+            "user_id": self.user_id,
+            "city": self.city,
+            "age": self.age
+        }.__str__()
+
+if __name__ == "__main__":
+    opts, args = getopt.getopt(sys.argv[1:],shortopts="b:t:",longopts=["bootstrap-server=", "topic="])
+    opts = dict(opts)
+    producer = KafkaProducer(bootstrap_servers=opts.get("--bootstrap-server"),value_serializer=lambda m: json.dumps(m,ensure_ascii=False).encode(encoding="utf-8"))
+    user_list = [User(i,fake.city(),fake.ssn()) for i in range(1000)]
+    time_seris = generate_time_series("2022-03-21 08:00:00", "2022-03-21 21:00:00")
+    for current in time_seris:
+        sampled = random.sample(user_list,200)
+        for user in sampled:
+            if(user.session is None):
+                user.session = VideoSession(current)
+                user.session.count += random.randint(2,10)
+            elif (current - user.session.last_time <= timedelta(minutes=30)):
+                user.session.count += random.randint(2,10)
+                user.session.last_time = current
+            else :
+                data = {
+                    "session_id": user.session.session_id,
+                    "video_count": user.session.count,
+                    "duration_time": int((timedelta(minutes=20) if(user.session.last_time == user.session.start_time) else user.session.last_time - user.session.start_time).total_seconds()),
+                    "user_id": user.id,
+                    "user_age": user.age,
+                    "city": user.city,
+                    "session_start_time": user.session.start_time.__str__(),
+                    "session_end_time": user.session.last_time.__str__()
+                }
+                producer.send(opts.get("--topic"),data)
+                user.session = None
+        sleep(1)
+                
