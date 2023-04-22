@@ -1,0 +1,1 @@
+选择Database-> Edit   current   database,选择Sql-> Format，有一项CaseSensitivityUsingQuote，它的comment为“Determines   if   the   case   sensitivity   for   identifiers   is   managed   using   double   quotes”，表示是否适用双引号来规定标识符的大小写，可以看到右边的values默认值为“YES”，改为“No”，点击确定。在弹出的确认对话框中点击确认，即可。这样保存后再次生成脚本，将不会生成引号标识。
